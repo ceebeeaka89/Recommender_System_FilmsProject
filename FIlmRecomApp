@@ -1,0 +1,70 @@
+import pandas as pd
+import numpy as np
+#import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Step 1: Load the data
+column_names = ['user_id', 'item_id', 'rating', 'timestamp']
+df = pd.read_csv('u.data', sep='\t', names=column_names)
+movie_titles = pd.read_csv('Movie_Id_Titles')
+
+# Merge movie titles with ratings
+df = pd.merge(df, movie_titles, on='item_id')
+
+# Step 2: Prepare the data
+# Calculate the average rating and number of ratings per movie
+ratings = pd.DataFrame(df.groupby('title')['rating'].mean())
+ratings['num of ratings'] = pd.DataFrame(df.groupby('title')['rating'].count())
+
+# Create a pivot table with users as rows and movie titles as columns
+moviemat = df.pivot_table(index='user_id', columns='title', values='rating')
+
+# Step 3: Recommendation function
+def recommend_movie(movie_name):
+    try:
+        # Get user ratings for the selected movie
+        movie_user_ratings = moviemat[movie_name]
+        
+        # Find movies with correlation to the selected movie
+        similar_to_movie = moviemat.corrwith(movie_user_ratings)
+        
+        # Create a DataFrame of the correlations and clean NaN values
+        corr_movie = pd.DataFrame(similar_to_movie, columns=['Correlation'])
+        corr_movie.dropna(inplace=True)
+        
+        # Join the correlation with the number of ratings
+        corr_movie = corr_movie.join(ratings['num of ratings'])
+        
+        # Filter movies with more than 100 ratings and sort by correlation
+        recommendations = corr_movie[corr_movie['num of ratings'] > 100].sort_values('Correlation', ascending=False).head(3)
+        
+        return recommendations
+    except KeyError:
+        return "The movie is not in our database. Please try another title."
+
+# Step 4: Command-line interaction
+def movie_recommender():
+    print("Welcome to the Movie Recommender System!")
+    print("Type the name of a movie you've watched, and we'll recommend similar movies.")
+    print("Type 'quit' to exit.")
+    
+    while True:
+        movie_name = input("\nEnter a movie title: ")
+        if movie_name.lower() == 'quit':
+            print("Thanks for using the Movie Recommender System. Goodbye!")
+            break
+        
+        # Get recommendations
+        recommendations = recommend_movie(movie_name)
+        
+        # Display recommendations
+        if isinstance(recommendations, str):
+            print(recommendations)  # In case the movie is not found
+        else:
+            print(f"\nTop movie recommendations based on {movie_name}:\n")
+            for idx, row in recommendations.iterrows():
+                print(f"{idx} (Correlation: {row['Correlation']:.2f}, Number of Ratings: {row['num of ratings']})")
+
+# Run the movie recommender
+movie_recommender()
+
